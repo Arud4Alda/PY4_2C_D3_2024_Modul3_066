@@ -3,46 +3,77 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:py4_2c_d3_2024_modul1_066/features/logbook/models/log_model.dart';
 
-class LogController 
-{
+class LogController {
   final ValueNotifier<List<LogModel>> logsNotifier = ValueNotifier([]);
+  final ValueNotifier<List<LogModel>> filteredLogs = ValueNotifier([]);
   static const String _storageKey = 'user_logs_data';
 
-  LogController() {loadFromDisk();}
+  String _currentQuery = "";
+  LogController();
+  //LogController() {loadLogs();}
 
-  void addLog(String title, String desc) 
-  {
+  //ADD
+  void addLog(String title, String category, String desc) {
     final newLog = LogModel(
       title: title,
+      category: category,
       description: desc,
       date: DateTime.now().toString(),
     );
     logsNotifier.value = [...logsNotifier.value, newLog];
+    _applyFilter();
     saveToDisk();
   }
 
-  void updateLog(int index, String title, String desc) 
-  {
+  //UPDATE
+  void updateLog(LogModel oldLog, String title, String category, String desc) {
     final currentLogs = List<LogModel>.from(logsNotifier.value);
-    currentLogs[index] = LogModel(
-      title: title,
-      description: desc,
-      date: DateTime.now().toString(),
-    );
+    final index = currentLogs.indexOf(oldLog);
+
+    if (index != -1) {
+      currentLogs[index] = LogModel(
+        title: title,
+        category: category,
+        description: desc,
+        date: DateTime.now().toString(),
+      );
+    }
     logsNotifier.value = currentLogs;
+    _applyFilter();
     saveToDisk();
   }
 
-  void removeLog(int index) 
-  {
+  //DELETE
+  void removeLog(LogModel log) {
     final currentLogs = List<LogModel>.from(logsNotifier.value);
-    currentLogs.removeAt(index);
+    currentLogs.remove(log);
     logsNotifier.value = currentLogs;
+    _applyFilter();
     saveToDisk();
   }
 
-  Future<void> saveToDisk() async 
-  {
+  //SEARCH
+  void searchLog(String query) {
+    _currentQuery = query;
+    _applyFilter();
+  }
+
+  //FILTER
+  void _applyFilter() {
+    if (_currentQuery.isEmpty) {
+      filteredLogs.value = logsNotifier.value;
+    } else {
+      filteredLogs.value = logsNotifier.value
+          .where(
+            (log) =>
+                log.title.toLowerCase().contains(_currentQuery.toLowerCase()),
+          )
+          .toList();
+    }
+  }
+
+  //SAVE
+  Future<void> saveToDisk() async {
     final prefs = await SharedPreferences.getInstance();
     final String encodedData = jsonEncode(
       logsNotifier.value.map((e) => e.toMap()).toList(),
@@ -50,15 +81,19 @@ class LogController
     await prefs.setString(_storageKey, encodedData);
   }
 
-  Future<void> loadFromDisk() async 
-  {
+  //LOAD
+  Future<void> loadLogs() async {
     final prefs = await SharedPreferences.getInstance();
-    final String? data = prefs.getString(_storageKey);
-    if (data != null) 
-    {
-      final List decoded = jsonDecode(data);
-      logsNotifier.value = decoded.map((e) => LogModel.fromMap(e)).toList();
-    }
+    final String? rawJson = prefs.getString(_storageKey);
 
+    if (rawJson != null) {
+      // 1. Decode String ke List<Map>
+      final List decoded = jsonDecode(rawJson);
+      // 2. Map kembali ke List<LogModel>
+      logsNotifier.value = decoded
+          .map((item) => LogModel.fromMap(item))
+          .toList();
+    }
+    _applyFilter();
   }
 }
