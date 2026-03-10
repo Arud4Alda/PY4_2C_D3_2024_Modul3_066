@@ -14,17 +14,13 @@ void main() {
     'Memastikan koneksi ke MongoDB Atlas berhasil via MongoService',
     () async {
       final mongoService = MongoService();
-
-      // Memanfaatkan LogHelper baru yang sudah pakai dev.log dan print berwarna
       await LogHelper.writeLog(
         "--- START CONNECTION TEST ---",
         source: sourceFile,
       );
 
       try {
-        // Mengetes koneksi
         await mongoService.connect();
-
         // Ekspektasi: URI tidak null dan koneksi berhasil
         expect(dotenv.env['MONGODB_URI'], isNotNull);
 
@@ -41,7 +37,6 @@ void main() {
         );
         fail("Koneksi gagal: $e");
       } finally {
-        // Selalu tutup koneksi agar tidak menggantung di dashboard Atlas
         await mongoService.close();
         await LogHelper.writeLog("--- END TEST ---", source: sourceFile);
       }
