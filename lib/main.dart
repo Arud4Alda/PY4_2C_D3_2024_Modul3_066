@@ -8,13 +8,13 @@ void main() async{
   await dotenv.load(fileName: ".env");
   final mongoService = MongoService();
   await mongoService.connect();
-  print("DATABASE: ${mongoService.getDatabaseName()}");
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
+  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(

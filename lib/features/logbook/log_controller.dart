@@ -1,74 +1,55 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:py4_2c_d3_2024_modul1_066/features/logbook/models/log_model.dart';
-import 'package:py4_2c_d3_2024_modul1_066/services/mongo_service.dart';
 
 class LogController {
   final ValueNotifier<List<LogModel>> logsNotifier = ValueNotifier([]);
   final ValueNotifier<List<LogModel>> filteredLogs = ValueNotifier([]);
-  String _currentQuery = "";
-  List<LogModel> get logs => logsNotifier.value;
-  LogController();
+  static const String _storageKey = 'user_logs_data';
 
-  //LOAD
-  Future<void> loadLogs() async {
-    final data = await MongoService().getLogs();
-    logsNotifier.value = data;
-    _applyFilter();
-  }
+  String _currentQuery = "";
+  LogController();
+  //LogController() {loadLogs();}
 
   //ADD
-  Future<void> addLog(String title, String category, String desc) async {
+  void addLog(String title, String category, String desc) {
     final newLog = LogModel(
-      //id: ObjectId(),
       title: title,
       category: category,
       description: desc,
       date: DateTime.now().toString(),
     );
-    await MongoService().insertLog(newLog);
-    final current = List<LogModel>.from(logsNotifier.value);
-    current.add(newLog);
-    logsNotifier.value = current;
+    logsNotifier.value = [...logsNotifier.value, newLog];
     _applyFilter();
+    saveToDisk();
   }
 
   //UPDATE
-  Future<void> updateLog(
-    LogModel oldLog,
-    String title,
-    String category,
-    String desc,
-  ) async {
-    final updatedLog = LogModel(
-      id: oldLog.id,
-      title: title,
-      category: category,
-      description: desc,
-      date: DateTime.now().toString(),
-    );
-    await MongoService().updateLog(updatedLog);
+  void updateLog(LogModel oldLog, String title, String category, String desc) {
+    final currentLogs = List<LogModel>.from(logsNotifier.value);
+    final index = currentLogs.indexOf(oldLog);
 
-    final current = List<LogModel>.from(logsNotifier.value);
-    final index = current.indexOf(oldLog);
     if (index != -1) {
-      current[index] = updatedLog;
+      currentLogs[index] = LogModel(
+        title: title,
+        category: category,
+        description: desc,
+        date: DateTime.now().toString(),
+      );
     }
-
-    logsNotifier.value = current;
+    logsNotifier.value = currentLogs;
     _applyFilter();
+    saveToDisk();
   }
 
   //DELETE
-  Future<void> removeLog(LogModel log) async
-  {
-    if (log.id == null) return;
-    await MongoService().deleteLog(log.id!);
-
-    final current = List<LogModel>.from(logsNotifier.value);
-    current.remove(log);
-
-    logsNotifier.value = current;
+  void removeLog(LogModel log) {
+    final currentLogs = List<LogModel>.from(logsNotifier.value);
+    currentLogs.remove(log);
+    logsNotifier.value = currentLogs;
     _applyFilter();
+    saveToDisk();
   }
 
   //SEARCH
@@ -89,5 +70,30 @@ class LogController {
           )
           .toList();
     }
+  }
+
+  //SAVE
+  Future<void> saveToDisk() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String encodedData = jsonEncode(
+      logsNotifier.value.map((e) => e.toMap()).toList(),
+    );
+    await prefs.setString(_storageKey, encodedData);
+  }
+
+  //LOAD
+  Future<void> loadLogs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? rawJson = prefs.getString(_storageKey);
+
+    if (rawJson != null) {
+      // 1. Decode String ke List<Map>
+      final List decoded = jsonDecode(rawJson);
+      // 2. Map kembali ke List<LogModel>
+      logsNotifier.value = decoded
+          .map((item) => LogModel.fromMap(item))
+          .toList();
+    }
+    _applyFilter();
   }
 }

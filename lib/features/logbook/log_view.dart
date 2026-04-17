@@ -1,34 +1,47 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:intl/date_symbol_data_local.dart';
 import 'package:py4_2c_d3_2024_modul1_066/features/logbook/log_controller.dart';
 import 'package:py4_2c_d3_2024_modul1_066/features/onboarding/onboarding_view.dart';
 import 'package:py4_2c_d3_2024_modul1_066/features/logbook/models/log_model.dart';
-import 'package:py4_2c_d3_2024_modul1_066/helpers/log_helper.dart';
-import 'package:py4_2c_d3_2024_modul1_066/services/mongo_service.dart';
 
-class LogView extends StatefulWidget {
+class LogView extends StatefulWidget 
+{
   final String username;
   const LogView({super.key, required this.username});
   @override
   State<LogView> createState() => _LogViewState();
 }
 
+Color getCategoryColor(String category) 
+{
+  switch (category) {
+    case "Pekerjaan":
+      return const Color.fromARGB(255, 93, 130, 163);
+    case "Pribadi":
+      return const Color.fromARGB(255, 100, 159, 102);
+    case "Urgent":
+      return const Color.fromARGB(255, 174, 98, 105);
+    default:
+      return Colors.grey.shade200;
+  }
+}
+
 class _LogViewState extends State<LogView> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
   final LogController _controller = LogController();
-  late Future<List<LogModel>> _futureLogs;
 
   //INIT STATE
   @override
-  void initState() {
+  void initState() 
+  {
     super.initState();
-    initializeDateFormatting('id_ID', null);
-    _initDatabase();
+    _controller.loadLogs();
+    //_controller = LogController();
+    Future.microtask(() => _initDatabase());
   }
 
   Future<void> _initDatabase() async {
+    setState(() => _isLoading = true);
     try {
       await LogHelper.writeLog(
         "UI: Memulai inisialisasi database...",
@@ -41,9 +54,13 @@ class _LogViewState extends State<LogView> {
         source: "log_view.dart",
       );
 
-      await MongoService().connect();
-      _futureLogs = MongoService().getLogs();
-      setState(() {});
+      // Mengaktifkan kembali koneksi dengan timeout 15 detik (lebih longgar untuk sinyal HP)
+      await MongoService().connect().timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw Exception(
+          "Koneksi Cloud Timeout. Periksa sinyal/IP Whitelist.",
+        ),
+      );
 
       await LogHelper.writeLog(
         "UI: Koneksi MongoService BERHASIL.",
@@ -56,7 +73,7 @@ class _LogViewState extends State<LogView> {
         source: "log_view.dart",
       );
 
-      await _controller.loadLogs();
+      await _controller.loadFromDisk();
 
       await LogHelper.writeLog(
         "UI: Data berhasil dimuat ke Notifier.",
@@ -74,23 +91,24 @@ class _LogViewState extends State<LogView> {
         );
       }
     } finally {
+      // 2. INILAH FINALLY: Apapun yang terjadi (Sukses/Gagal/Data Kosong), loading harus mati
       if (mounted) {
-        //setState(() => _isLoading = false);
+        setState(() => _isLoading = false);
       }
     }
   }
-
-  Color getCategoryColor(String category) {
-    switch (category) {
-      case "Pekerjaan":
-        return const Color.fromARGB(255, 93, 130, 163);
-      case "Pribadi":
-        return const Color.fromARGB(255, 100, 159, 102);
-      case "Urgent":
-        return const Color.fromARGB(255, 174, 98, 105);
-      default:
-        return Colors.grey.shade200;
-    }
+  
+  //SNACKBAR
+  void showSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: const TextStyle(color: Colors.white)),
+        backgroundColor: const Color.fromARGB(255, 106, 160, 128),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        margin: const EdgeInsets.all(20),
+      ),
+    );
   }
 
   //DIALOG TAMBAH
@@ -117,9 +135,7 @@ class _LogViewState extends State<LogView> {
                     ),
                   )
                   .toList(),
-              onChanged: (value) {
-                selectedCategory = value!;
-              },
+              onChanged: (value) {selectedCategory = value!;},
             ),
             TextField(
               controller: _contentController,
@@ -129,20 +145,16 @@ class _LogViewState extends State<LogView> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(context), 
             child: const Text("Batal"),
           ),
           ElevatedButton(
-            onPressed: () async {
-              await _controller.addLog(
+            onPressed: () {
+              _controller.addLog(
                 _titleController.text,
                 selectedCategory,
                 _contentController.text,
               );
-              setState(() {
-                _futureLogs = MongoService().getLogs();
-              });
-
               _titleController.clear();
               _contentController.clear();
               Navigator.pop(context);
@@ -177,9 +189,7 @@ class _LogViewState extends State<LogView> {
                     ),
                   )
                   .toList(),
-              onChanged: (value) {
-                selectedCategory = value!;
-              },
+              onChanged: (value) {selectedCategory = value!;},
             ),
             TextField(controller: _contentController),
           ],
@@ -190,16 +200,13 @@ class _LogViewState extends State<LogView> {
             child: const Text("Batal"),
           ),
           ElevatedButton(
-            onPressed: () async {
-              await _controller.updateLog(
+            onPressed: () {
+              _controller.updateLog(
                 log,
                 _titleController.text,
                 selectedCategory,
                 _contentController.text,
               );
-              setState(() {
-                _futureLogs = MongoService().getLogs();
-              });
               Navigator.pop(context);
             },
             child: const Text("Update"),
@@ -274,39 +281,23 @@ class _LogViewState extends State<LogView> {
             ),
           ),
           Expanded(
-            child: FutureBuilder<List<LogModel>>(
-              future: _futureLogs,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
+            child: ValueListenableBuilder<List<LogModel>>(
+              valueListenable: _controller.filteredLogs,
+              builder: (context, currentLogs, child) {
+                if (_isLoading) {
                   return const Center(
                     child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         CircularProgressIndicator(),
-                        SizedBox(height: 20),
-                        Text(
-                          "BMengambil Data dari Cloud...",
-                          style: TextStyle(
-                            color: Color.fromARGB(255, 106, 160, 128),
-                          ),
-                        ),
+                        SizedBox(height: 16),
+                        Text("Menghubungkan ke MongoDB Atlas..."),
                       ],
                     ),
                   );
                 }
 
-                if (snapshot.hasError) {
-                  return const Center(
-                    child: Text(
-                      "⚠️ Offline Mode Warning\nTidak dapat terhubung ke server.",
-                      textAlign: TextAlign.center,
-                    ),
-                  );
-                }
-
-                final logs = snapshot.data ?? [];
-
-                if (logs.isEmpty) {
+                if (currentLogs.isEmpty) {
                   return const Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -327,89 +318,73 @@ class _LogViewState extends State<LogView> {
                     ),
                   );
                 }
-                return RefreshIndicator(
-                  onRefresh: () async {
-                    setState(() {
-                      _futureLogs = MongoService().getLogs();
-                    });
+                return ListView.builder(
+                  itemCount: currentLogs.length,
+                  itemBuilder: (context, index) {
+                    final log = currentLogs[index];
+                    return Dismissible(
+                      key: ValueKey(log.title),
+                      direction: DismissDirection.endToStart,
+                      background: Container(
+                        color: Colors.red,
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.only(right: 20),
+                        child: const Icon(Icons.delete, color: Colors.white),
+                      ),
+                      onDismissed: (direction) 
+                      {
+                        _controller.removeLog(log);
+                      },
+                      child: Card(
+                        color: const Color.fromARGB(220, 255, 248, 231),
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: ListTile(
+                          leading: Icon(Icons.android_rounded, color: getCategoryColor(log.category)),
+                          title: Text(log.title),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(log.description),
+                              const SizedBox(height: 4),
+                              Text(
+                                log.date,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
+                          ),
+                          trailing: Wrap(
+                            children: [
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.edit,
+                                  color: Color.fromARGB(185, 100, 152, 194),
+                                ),
+                                onPressed: () => _showEditLogDialog(log), 
+                              ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.delete,
+                                  color: Color.fromARGB(255, 199, 118, 111),
+                                ),
+                                onPressed: () {_controller.removeLog(log);},
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
                   },
-                  child: ListView.builder(
-                    itemCount: logs.length,
-                    itemBuilder: (context, index) 
-                    {
-                      final log = logs[index];
-                      final formattedDate = DateFormat('dd MMM yyyy', 'id_ID').format(DateTime.parse(log.date));
-                          return Dismissible(
-                            key: ValueKey(log.title),
-                            direction: DismissDirection.endToStart,
-                            background: Container(
-                              color: Colors.red,
-                              alignment: Alignment.centerRight,
-                              padding: const EdgeInsets.only(right: 20),
-                              child: const Icon(
-                                Icons.delete,
-                                color: Colors.white,
-                              ),
-                            ),
-                            onDismissed: (direction) async{
-                              await _controller.removeLog(log);
-                              setState(() {
-                                _futureLogs = MongoService().getLogs();
-                              });
-                            },
-                            child: Card(
-                              color: const Color.fromARGB(220, 255, 248, 231),
-                              elevation: 2,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: ListTile(
-                                leading: Icon(
-                                  Icons.android_rounded,
-                                  color: getCategoryColor(log.category),
-                                ),
-                                title: Text(log.title),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(log.description),
-                                    const SizedBox(height: 4),
-                                    Text(formattedDate),
-                                  ],
-                                ),
-                                trailing: Wrap(
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(
-                                        Icons.edit,
-                                        color: Color.fromARGB(185,100,152,194,),
-                                      ),
-                                      onPressed: () => _showEditLogDialog(log),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(
-                                        Icons.delete,
-                                        color: Color.fromARGB(255,199,118,111),
-                                      ),
-                                      onPressed: () async {
-                                        await _controller.removeLog(log);
-                                        setState(() {
-                                          _futureLogs = MongoService().getLogs();
-                                        });
-                                      }, 
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          );
-                    },
-                  ),
                 );
               },
+            ),
           ),
-        ),
-       ],
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color.fromARGB(255, 106, 160, 128),
