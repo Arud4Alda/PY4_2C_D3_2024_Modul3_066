@@ -1,221 +1,100 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'dart:async';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:py4_2c_d3_2024_modul1_066/features/logbook/log_controller.dart';
-import 'package:py4_2c_d3_2024_modul1_066/features/onboarding/onboarding_view.dart';
 import 'package:py4_2c_d3_2024_modul1_066/features/logbook/models/log_model.dart';
-import 'package:py4_2c_d3_2024_modul1_066/helpers/log_helper.dart';
-import 'package:py4_2c_d3_2024_modul1_066/services/mongo_service.dart';
+import 'package:py4_2c_d3_2024_modul1_066/services/access_control_service.dart';
+import 'package:py4_2c_d3_2024_modul1_066/features/logbook/log_editor_page.dart';
+import 'package:py4_2c_d3_2024_modul1_066/features/auth/login_view.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 class LogView extends StatefulWidget {
-  final String username;
-  const LogView({super.key, required this.username});
+  final dynamic currentUser;
+  const LogView({super.key, required this.currentUser});
   @override
   State<LogView> createState() => _LogViewState();
 }
 
 class _LogViewState extends State<LogView> {
-  final TextEditingController _titleController = TextEditingController();
-  final TextEditingController _contentController = TextEditingController();
-  final LogController _controller = LogController();
-  late Future<List<LogModel>> _futureLogs;
+  late final LogController _controller;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
   //INIT STATE
   @override
   void initState() {
     super.initState();
     initializeDateFormatting('id_ID', null);
-    _initDatabase();
+    _controller = LogController();
+    _controller.loadLogs(widget.currentUser['teamId']);
+    _setupAutoSync();
   }
 
-  Future<void> _initDatabase() async {
-    try {
-      await LogHelper.writeLog(
-        "UI: Memulai inisialisasi database...",
-        source: "log_view.dart",
-      );
+  @override
+  void dispose() {
+    _connectivitySubscription?.cancel();
+    super.dispose();
+  }
 
-      // Mencoba koneksi ke MongoDB Atlas (Cloud)
-      await LogHelper.writeLog(
-        "UI: Menghubungi MongoService.connect()...",
-        source: "log_view.dart",
-      );
+  void _setupAutoSync() {
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((List<ConnectivityResult> results) async {
+      // Cek apakah perangkat terhubung ke WiFi atau Mobile Data
+      bool isConnected = results.contains(ConnectivityResult.mobile) || 
+                         results.contains(ConnectivityResult.wifi);
 
-      await MongoService().connect();
-      _futureLogs = MongoService().getLogs();
-      setState(() {});
-
-      await LogHelper.writeLog(
-        "UI: Koneksi MongoService BERHASIL.",
-        source: "log_view.dart",
-      );
-
-      // Mengambil data log dari Cloud
-      await LogHelper.writeLog(
-        "UI: Memanggil controller.loadFromDisk()...",
-        source: "log_view.dart",
-      );
-
-      await _controller.loadLogs();
-
-      await LogHelper.writeLog(
-        "UI: Data berhasil dimuat ke Notifier.",
-        source: "log_view.dart",
-      );
-    } catch (e) {
-      await LogHelper.writeLog(
-        "UI: Error - $e",
-        source: "log_view.dart",
-        level: 1,
-      );
-      if (mounted) {
+      if (isConnected) {
+        // Tampilkan notifikasi kecil bahwa sinkronisasi sedang berjalan (Opsional tapi bagus untuk UX)
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Masalah: $e"), backgroundColor: Colors.red),
+          const SnackBar(
+            content: Text("Internet terhubung! Menjalankan sinkronisasi..."),
+            backgroundColor: Color.fromARGB(255, 106, 160, 128),
+            duration: Duration(seconds: 2),
+          ),
         );
+        // kirim data online ke cloud
+        await _controller.syncOfflineLogs();
+        // Memanggil loadLogs untuk mengambil data terbaru dari server
+        await _controller.loadLogs(widget.currentUser['teamId']);
       }
-    } finally {
-      if (mounted) {
-        //setState(() => _isLoading = false);
-      }
-    }
+    });
+  }
+
+  void _goToEditor({LogModel? log, int? index}) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => LogEditorPage(
+          log: log,
+          index: index,
+          controller: _controller,
+          currentUser: widget.currentUser,
+        ),
+      ),
+    );
   }
 
   Color getCategoryColor(String category) {
     switch (category) {
-      case "Pekerjaan":
+      case "Mechanical":
         return const Color.fromARGB(255, 93, 130, 163);
-      case "Pribadi":
+      case "Electronic":
         return const Color.fromARGB(255, 100, 159, 102);
-      case "Urgent":
+      case "Software":
         return const Color.fromARGB(255, 174, 98, 105);
       default:
         return Colors.grey.shade200;
     }
   }
 
-  //DIALOG TAMBAH
-  void _showAddLogDialog() {
-    String selectedCategory = "Pribadi";
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Tambah Catatan Baru"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min, // Agar dialog tidak memenuhi layar
-          children: [
-            TextField(
-              controller: _titleController,
-              decoration: const InputDecoration(hintText: "Judul Catatan"),
-            ),
-            DropdownButtonFormField<String>(
-              initialValue: selectedCategory,
-              items: ["Pekerjaan", "Pribadi", "Urgent"]
-                  .map(
-                    (category) => DropdownMenuItem(
-                      value: category,
-                      child: Text(category),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (value) {
-                selectedCategory = value!;
-              },
-            ),
-            TextField(
-              controller: _contentController,
-              decoration: const InputDecoration(hintText: "Isi Deskripsi"),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Batal"),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              await _controller.addLog(
-                _titleController.text,
-                selectedCategory,
-                _contentController.text,
-              );
-              setState(() {
-                _futureLogs = MongoService().getLogs();
-              });
-
-              _titleController.clear();
-              _contentController.clear();
-              Navigator.pop(context);
-            },
-            child: const Text("Simpan"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  //DIALOG EDIT
-  void _showEditLogDialog(LogModel log) {
-    String selectedCategory = log.category;
-    _titleController.text = log.title;
-    _contentController.text = log.description;
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Edit Catatan"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: _titleController),
-            DropdownButtonFormField<String>(
-              initialValue: selectedCategory,
-              items: ["Pekerjaan", "Pribadi", "Urgent"]
-                  .map(
-                    (category) => DropdownMenuItem(
-                      value: category,
-                      child: Text(category),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (value) {
-                selectedCategory = value!;
-              },
-            ),
-            TextField(controller: _contentController),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Batal"),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              await _controller.updateLog(
-                log,
-                _titleController.text,
-                selectedCategory,
-                _contentController.text,
-              );
-              setState(() {
-                _futureLogs = MongoService().getLogs();
-              });
-              Navigator.pop(context);
-            },
-            child: const Text("Update"),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      //judul atas
       appBar: AppBar(
-        title: Text("Logbook", style: TextStyle(color: Colors.white)),
+        title: Text("Logbook ${widget.currentUser['username']}", style: TextStyle(color: Colors.white)),
         backgroundColor: const Color.fromARGB(255, 106, 160, 128),
         actions: [
+          //logout
           IconButton(
             icon: const Icon(
               Icons.logout,
@@ -236,11 +115,10 @@ class _LogViewState extends State<LogView> {
                       TextButton(
                         onPressed: () {
                           Navigator.pop(context);
-
                           Navigator.pushAndRemoveUntil(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => const OnboardingView(),
+                              builder: (context) => const LoginView(),
                             ),
                             (route) => false,
                           );
@@ -262,6 +140,7 @@ class _LogViewState extends State<LogView> {
       backgroundColor: const Color.fromARGB(255, 255, 248, 231),
       body: Column(
         children: [
+          // Search Bar
           Padding(
             padding: const EdgeInsets.all(12),
             child: TextField(
@@ -274,39 +153,16 @@ class _LogViewState extends State<LogView> {
             ),
           ),
           Expanded(
-            child: FutureBuilder<List<LogModel>>(
-              future: _futureLogs,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 20),
-                        Text(
-                          "BMengambil Data dari Cloud...",
-                          style: TextStyle(
-                            color: Color.fromARGB(255, 106, 160, 128),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                if (snapshot.hasError) {
-                  return const Center(
-                    child: Text(
-                      "⚠️ Offline Mode Warning\nTidak dapat terhubung ke server.",
-                      textAlign: TextAlign.center,
-                    ),
-                  );
-                }
-
-                final logs = snapshot.data ?? [];
-
-                if (logs.isEmpty) {
+            //child: FutureBuilder<List<LogModel>>(
+            child: ValueListenableBuilder<List<LogModel>>(
+              valueListenable: _controller.filteredLogs,
+              //valueListenable: _controller.logsNotifier,
+              builder: (context, logs, child) { 
+                final String currentUserId = widget.currentUser['uid'];
+                final List<LogModel> displayLogs = logs.where((log) {
+                  return log.authorId == currentUserId || log.isPublic == true;
+                }).toList();          
+                if (displayLogs.isEmpty) {
                   return const Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -329,94 +185,84 @@ class _LogViewState extends State<LogView> {
                 }
                 return RefreshIndicator(
                   onRefresh: () async {
-                    setState(() {
-                      _futureLogs = MongoService().getLogs();
-                    });
+                    await _controller.loadLogs(widget.currentUser['teamId']);
                   },
                   child: ListView.builder(
-                    itemCount: logs.length,
-                    itemBuilder: (context, index) 
-                    {
-                      final log = logs[index];
-                      final formattedDate = DateFormat('dd MMM yyyy', 'id_ID').format(DateTime.parse(log.date));
-                          return Dismissible(
-                            key: ValueKey(log.title),
-                            direction: DismissDirection.endToStart,
-                            background: Container(
-                              color: Colors.red,
-                              alignment: Alignment.centerRight,
-                              padding: const EdgeInsets.only(right: 20),
-                              child: const Icon(
-                                Icons.delete,
-                                color: Colors.white,
-                              ),
+                 // return ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    itemCount: displayLogs.length,
+                    itemBuilder: (context, index) {              
+                      final log = displayLogs[index];
+                      final isOwner = log.authorId == widget.currentUser['uid'];
+                      final formattedDate = DateFormat(
+                        'dd MMM yyyy',
+                        'id_ID',
+                      ).format(DateTime.parse(log.date));                      
+                      return Card(
+                          color: const Color.fromARGB(220, 255, 248, 231),
+                          elevation: 2,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: ListTile(
+                            leading: Icon(
+                              //Icons.android_rounded,
+                              log.id != null
+                                ? Icons.cloud_done
+                                : Icons.cloud_upload_outlined,
+                              color: getCategoryColor(log.category),
                             ),
-                            onDismissed: (direction) async{
-                              await _controller.removeLog(log);
-                              setState(() {
-                                _futureLogs = MongoService().getLogs();
-                              });
-                            },
-                            child: Card(
-                              color: const Color.fromARGB(220, 255, 248, 231),
-                              elevation: 2,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: ListTile(
-                                leading: Icon(
-                                  Icons.android_rounded,
-                                  color: getCategoryColor(log.category),
+                            title: Text(log.title),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(log.description),
+                                const SizedBox(height: 4),
+                                Text(formattedDate),
+                                Text(
+                                  "Oleh: ${log.authorId} | Team: ${log.teamId}",
                                 ),
-                                title: Text(log.title),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(log.description),
-                                    const SizedBox(height: 4),
-                                    Text(formattedDate),
-                                  ],
-                                ),
-                                trailing: Wrap(
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(
-                                        Icons.edit,
-                                        color: Color.fromARGB(185,100,152,194,),
-                                      ),
-                                      onPressed: () => _showEditLogDialog(log),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(
-                                        Icons.delete,
-                                        color: Color.fromARGB(255,199,118,111),
-                                      ),
-                                      onPressed: () async {
-                                        await _controller.removeLog(log);
-                                        setState(() {
-                                          _futureLogs = MongoService().getLogs();
-                                        });
-                                      }, 
-                                    ),
-                                  ],
-                                ),
-                              ),
+                              ],
                             ),
-                          );
-                    },
-                  ),
-                );
+                            trailing: Wrap(
+                              children: [
+                                if (AccessControlService.canPerform(widget.currentUser['role'],AccessControlService.actionUpdate,isOwner: isOwner,))
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.edit,
+                                      color: Color.fromARGB(185, 100, 152, 194),
+                                    ),
+                                    onPressed: ()  => _goToEditor(log: log, index: index),
+                                  ),
+                                if (AccessControlService.canPerform(widget.currentUser['role'],AccessControlService.actionDelete,isOwner: isOwner,))
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.delete,
+                                      color: Color.fromARGB(255, 199, 118, 111),
+                                    ),
+                                    onPressed: () => _controller.removeLog(log),
+                                  ),
+                              ],
+                            ),
+                          ),                        
+                      );
+                    },                  
+                ),
+               );
               },
+            ),
           ),
-        ),
-       ],
+        ],
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color.fromARGB(255, 106, 160, 128),
-        foregroundColor: const Color.fromARGB(255, 255, 255, 255),
-        onPressed: _showAddLogDialog,
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton:
+          AccessControlService.canPerform(widget.currentUser['role'], AccessControlService.actionCreate,)
+          ? FloatingActionButton(
+              backgroundColor: const Color.fromARGB(255, 106, 160, 128),
+              foregroundColor: const Color.fromARGB(255, 255, 255, 255),
+              onPressed: () => _goToEditor(),
+              child: const Icon(Icons.add),
+            )
+          : null,
     );
   }
 }
