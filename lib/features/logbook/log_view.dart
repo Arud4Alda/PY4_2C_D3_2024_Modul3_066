@@ -8,6 +8,7 @@ import 'package:py4_2c_d3_2024_modul1_066/services/access_control_service.dart';
 import 'package:py4_2c_d3_2024_modul1_066/features/logbook/log_editor_page.dart';
 import 'package:py4_2c_d3_2024_modul1_066/features/auth/login_view.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 
 class LogView extends StatefulWidget {
   final dynamic currentUser;
@@ -216,11 +217,18 @@ class _LogViewState extends State<LogView> {
                             subtitle: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(log.description),
-                                const SizedBox(height: 4),
-                                Text(formattedDate),
+                                MarkdownBody(
+                                  data: log.description,
+                                  styleSheet: MarkdownStyleSheet(
+                                    p: const TextStyle(fontSize: 14, color: Colors.black87),
+                                    strong: const TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                                const SizedBox(height: 8), 
+                                Text(formattedDate, style: const TextStyle(fontSize: 12, color: Colors.grey)),
                                 Text(
                                   "Oleh: ${log.authorId} | Team: ${log.teamId}",
+                                  style: const TextStyle(fontSize: 12, color: Colors.grey),
                                 ),
                               ],
                             ),
