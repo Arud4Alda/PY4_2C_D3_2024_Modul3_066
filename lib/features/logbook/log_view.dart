@@ -6,10 +6,16 @@ import 'package:py4_2c_d3_2024_modul1_066/features/onboarding/onboarding_view.da
 import 'package:py4_2c_d3_2024_modul1_066/features/logbook/models/log_model.dart';
 import 'package:py4_2c_d3_2024_modul1_066/helpers/log_helper.dart';
 import 'package:py4_2c_d3_2024_modul1_066/services/mongo_service.dart';
+import 'package:py4_2c_d3_2024_modul1_066/services/access_control_service.dart';
+import 'package:py4_2c_d3_2024_modul1_066/features/auth/login_controller.dart';
+import 'package:py4_2c_d3_2024_modul1_066/features/logbook/log_editor_page.dart'; 
+import 'package:py4_2c_d3_2024_modul1_066/features/auth/login_view.dart';
 
 class LogView extends StatefulWidget {
   final String username;
-  const LogView({super.key, required this.username});
+  final dynamic currentUser;
+  //const LogView({super.key, required this.username});
+  const LogView({super.key, required this.username, required this.currentUser});
   @override
   State<LogView> createState() => _LogViewState();
 }
@@ -17,8 +23,10 @@ class LogView extends StatefulWidget {
 class _LogViewState extends State<LogView> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
+  final TextEditingController _teamidController = TextEditingController();
   final LogController _controller = LogController();
   late Future<List<LogModel>> _futureLogs;
+  String _searchQuery = "";
 
   //INIT STATE
   @override
@@ -26,7 +34,14 @@ class _LogViewState extends State<LogView> {
     super.initState();
     initializeDateFormatting('id_ID', null);
     _initDatabase();
+    _controller = LogController();
+    _controller.loadLogs(widget.currentUser['teamId']);
+
   }
+
+  void _loadLogs() {
+  _futureLogs = MongoService().getLogs();
+}
 
   Future<void> _initDatabase() async {
     try {
@@ -125,6 +140,10 @@ class _LogViewState extends State<LogView> {
               controller: _contentController,
               decoration: const InputDecoration(hintText: "Isi Deskripsi"),
             ),
+            TextField(
+              controller: _teamidController,
+              decoration: const InputDecoration(hintText: "Isi ID Kelompok"),
+            ),
           ],
         ),
         actions: [
@@ -138,6 +157,7 @@ class _LogViewState extends State<LogView> {
                 _titleController.text,
                 selectedCategory,
                 _contentController.text,
+                _teamidController.text,
               );
               setState(() {
                 _futureLogs = MongoService().getLogs();
@@ -145,6 +165,7 @@ class _LogViewState extends State<LogView> {
 
               _titleController.clear();
               _contentController.clear();
+              _teamidController.clear();
               Navigator.pop(context);
             },
             child: const Text("Simpan"),
@@ -159,6 +180,7 @@ class _LogViewState extends State<LogView> {
     String selectedCategory = log.category;
     _titleController.text = log.title;
     _contentController.text = log.description;
+    _teamidController.text = log.teamId;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -182,6 +204,7 @@ class _LogViewState extends State<LogView> {
               },
             ),
             TextField(controller: _contentController),
+            TextField(controller: _teamidController),
           ],
         ),
         actions: [
@@ -196,6 +219,7 @@ class _LogViewState extends State<LogView> {
                 _titleController.text,
                 selectedCategory,
                 _contentController.text,
+                _teamidController.text,
               );
               setState(() {
                 _futureLogs = MongoService().getLogs();
@@ -265,7 +289,8 @@ class _LogViewState extends State<LogView> {
           Padding(
             padding: const EdgeInsets.all(12),
             child: TextField(
-              onChanged: (value) => _controller.searchLog(value),
+              //onChanged: (value) => _controller.searchLog(value),
+              onChanged: (value) {setState(() {_searchQuery = value.toLowerCase();});},
               decoration: const InputDecoration(
                 labelText: "Cari Catatan...",
                 prefixIcon: Icon(Icons.search),
@@ -297,14 +322,29 @@ class _LogViewState extends State<LogView> {
 
                 if (snapshot.hasError) {
                   return const Center(
-                    child: Text(
-                      "⚠️ Offline Mode Warning\nTidak dapat terhubung ke server.",
-                      textAlign: TextAlign.center,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.wifi_off,size: 80,color: Colors.grey,),
+                        SizedBox(height: 20),
+                        Text(
+                          "Anda sedang offline",
+                          style: TextStyle(fontSize: 18),
+                        ),
+                        Text(
+                          "Tidak dapat terhubung ke server",
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ],
                     ),
                   );
                 }
 
                 final logs = snapshot.data ?? [];
+                final filteredLogs = logs.where((log) {
+                  return log.title.toLowerCase().contains(_searchQuery) ||
+                        log.description.toLowerCase().contains(_searchQuery);
+                }).toList();
 
                 if (logs.isEmpty) {
                   return const Center(
@@ -334,10 +374,10 @@ class _LogViewState extends State<LogView> {
                     });
                   },
                   child: ListView.builder(
-                    itemCount: logs.length,
+                    itemCount: filteredLogs.length,
                     itemBuilder: (context, index) 
                     {
-                      final log = logs[index];
+                      final log = filteredLogs[index];
                       final formattedDate = DateFormat('dd MMM yyyy', 'id_ID').format(DateTime.parse(log.date));
                           return Dismissible(
                             key: ValueKey(log.title),
@@ -372,13 +412,15 @@ class _LogViewState extends State<LogView> {
                                 subtitle: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(log.description),
+                                    Text(log.teamId),
+                                    Text(log.description),                                    
                                     const SizedBox(height: 4),
                                     Text(formattedDate),
                                   ],
                                 ),
                                 trailing: Wrap(
                                   children: [
+                                  if (AccessControlService.canPerform(currentUserRole, AccessControlService.actionUpdate, isOwner: log.authorId == currentUserId))
                                     IconButton(
                                       icon: const Icon(
                                         Icons.edit,
@@ -386,7 +428,8 @@ class _LogViewState extends State<LogView> {
                                       ),
                                       onPressed: () => _showEditLogDialog(log),
                                     ),
-                                    IconButton(
+                                    if (AccessControlService.canPerform(currentUserRole, AccessControlService.actionDelete, isOwner: log.authorId == currentUserId))
+                                      IconButton(
                                       icon: const Icon(
                                         Icons.delete,
                                         color: Color.fromARGB(255,199,118,111),

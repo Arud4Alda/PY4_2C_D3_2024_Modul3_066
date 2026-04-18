@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:py4_2c_d3_2024_modul1_066/features/logbook/models/log_model.dart';
+import 'package:py4_2c_d3_2024_modul1_066/services/access_control_service.dart';
 import 'package:py4_2c_d3_2024_modul1_066/services/mongo_service.dart';
+import 'package:py4_2c_d3_2024_modul1_066/helpers/log_helper.dart';
 
 class LogController {
   final ValueNotifier<List<LogModel>> logsNotifier = ValueNotifier([]);
@@ -17,13 +19,15 @@ class LogController {
   }
 
   //ADD
-  Future<void> addLog(String title, String category, String desc) async {
+  Future<void> addLog(String title, String category, String desc, String teamId) async {
     final newLog = LogModel(
       //id: ObjectId(),
       title: title,
       category: category,
       description: desc,
       date: DateTime.now().toString(),
+      authorId: "currentUserId", 
+      teamId: teamId,
     );
     await MongoService().insertLog(newLog);
     final current = List<LogModel>.from(logsNotifier.value);
@@ -33,18 +37,15 @@ class LogController {
   }
 
   //UPDATE
-  Future<void> updateLog(
-    LogModel oldLog,
-    String title,
-    String category,
-    String desc,
-  ) async {
+  Future<void> updateLog(LogModel oldLog,String title,String category,String desc, String teamId) async {
     final updatedLog = LogModel(
       id: oldLog.id,
       title: title,
       category: category,
       description: desc,
       date: DateTime.now().toString(),
+      authorId: oldLog.authorId,
+      teamId: teamId,
     );
     await MongoService().updateLog(updatedLog);
 
@@ -61,6 +62,10 @@ class LogController {
   //DELETE
   Future<void> removeLog(LogModel log) async
   {
+    if (!AccessControlService.canPerform(currentUserRole, 'delete', isOwner: log.authorId == current)) {
+    await LogHelper.writeLog("SECURITY BREACH: Unauthorized delete attempt", level: 1);
+    return; }
+
     if (log.id == null) return;
     await MongoService().deleteLog(log.id!);
 
