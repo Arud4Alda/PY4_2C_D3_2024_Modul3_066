@@ -10,6 +10,9 @@ class VisionController extends ChangeNotifier with WidgetsBindingObserver {
   Timer? _mockTimer;
   double mockX = 0.5; 
   double mockY = 0.5;
+  String mockLabel = "D40"; 
+  bool isFlashOn = false;
+  bool isOverlayVisible = true;
 
   VisionController() {
     // Mendaftarkan observer agar bisa memantau status aplikasi (Lifecycle)
@@ -25,14 +28,8 @@ class VisionController extends ChangeNotifier with WidgetsBindingObserver {
         notifyListeners();
         return;
       }
-
       // Memilih Kamera Belakang (Index 0)
-      controller = CameraController(
-        cameras[0],
-        ResolutionPreset.medium, // Keseimbangan antara akurasi AI & performa
-        enableAudio: false,      // Kita hanya butuh visual untuk deteksi jalan
-      );
-
+      controller = CameraController(cameras[0],ResolutionPreset.medium,enableAudio: false,);
       await controller!.initialize();
       isInitialized = true;
       errorMessage = null;
@@ -47,11 +44,29 @@ class VisionController extends ChangeNotifier with WidgetsBindingObserver {
     _mockTimer?.cancel(); 
     _mockTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       final random = Random();
-      // Menghasilkan nilai acak antara 0.2 hingga 0.8 agar kotak tidak keluar dari layar
+      // Menghasilkan nilai acak
       mockX = 0.2 + random.nextDouble() * 0.6;
       mockY = 0.2 + random.nextDouble() * 0.6;
+      List<String> labels = ["D00", "D10", "D20", "D40"];
+      mockLabel = labels[random.nextInt(labels.length)];
       notifyListeners(); // Beritahu UI untuk digambar ulang di posisi baru
     });
+  }
+
+  void toggleOverlay() {
+    isOverlayVisible = !isOverlayVisible;
+    notifyListeners();
+  }
+
+  Future<void> toggleFlash() async {
+    if (controller == null || !controller!.value.isInitialized) return;
+    try {
+      isFlashOn = !isFlashOn;
+      await controller!.setFlashMode(isFlashOn ? FlashMode.torch : FlashMode.off,);
+      notifyListeners();
+    } catch (e) {
+      print("Gagal menyalakan senter: $e");
+    }
   }
 
   @override
@@ -61,7 +76,6 @@ class VisionController extends ChangeNotifier with WidgetsBindingObserver {
     if (cameraController == null || !cameraController.value.isInitialized) {
       return;
     }
-
     if (state == AppLifecycleState.inactive) {
       _mockTimer?.cancel();
       cameraController.dispose();

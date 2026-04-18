@@ -293,20 +293,9 @@ class _LogViewState extends State<LogView> {
                 onPressed: () => _goToEditor(),
                 child: const Icon(Icons.add),
               )
-            // else
-            //   const SizedBox(), // Kosong jika user tidak memiliki akses 'Create'
-          ],
+           ],
         ),
       ),
-          // if (AccessControlService.canPerform(widget.currentUser['role'], AccessControlService.actionCreate))
-          //   FloatingActionButton(
-          //     heroTag: "btn_add",
-          //     backgroundColor: const Color.fromARGB(255, 106, 160, 128),
-          //     foregroundColor: const Color.fromARGB(255, 255, 255, 255),
-          //     onPressed: () => _goToEditor(),
-          //     child: const Icon(Icons.add),
-          //   )
-          // : null,
     );
   }
 }
