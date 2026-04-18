@@ -9,6 +9,7 @@ import 'package:py4_2c_d3_2024_modul1_066/features/logbook/log_editor_page.dart'
 import 'package:py4_2c_d3_2024_modul1_066/features/auth/login_view.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:py4_2c_d3_2024_modul1_066/features/vision/vision_view.dart';
 
 class LogView extends StatefulWidget {
   final dynamic currentUser;
@@ -262,15 +263,50 @@ class _LogViewState extends State<LogView> {
           ),
         ],
       ),
-      floatingActionButton:
-          AccessControlService.canPerform(widget.currentUser['role'], AccessControlService.actionCreate,)
-          ? FloatingActionButton(
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButton:Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween, // Mendorong tombol ke ujung kiri & kanan
+          children: [
+            // TOMBOL 1: KAMERA 
+            FloatingActionButton(
+              heroTag: "btn_vision", 
               backgroundColor: const Color.fromARGB(255, 106, 160, 128),
-              foregroundColor: const Color.fromARGB(255, 255, 255, 255),
-              onPressed: () => _goToEditor(),
-              child: const Icon(Icons.add),
-            )
-          : null,
+              foregroundColor: Colors.white,
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const VisionView()),
+                );
+              },
+              child: const Icon(Icons.camera_alt),
+            ),
+
+            // TOMBOL 2 ADD
+            // Tombol ini tetap menggunakan logika RBAC Anda
+            if (AccessControlService.canPerform(widget.currentUser['role'], AccessControlService.actionCreate))
+              FloatingActionButton(
+                heroTag: "btn_add", // WAJIB ada
+                backgroundColor: const Color.fromARGB(255, 106, 160, 128),
+                foregroundColor: Colors.white,
+                onPressed: () => _goToEditor(),
+                child: const Icon(Icons.add),
+              )
+            // else
+            //   const SizedBox(), // Kosong jika user tidak memiliki akses 'Create'
+          ],
+        ),
+      ),
+          // if (AccessControlService.canPerform(widget.currentUser['role'], AccessControlService.actionCreate))
+          //   FloatingActionButton(
+          //     heroTag: "btn_add",
+          //     backgroundColor: const Color.fromARGB(255, 106, 160, 128),
+          //     foregroundColor: const Color.fromARGB(255, 255, 255, 255),
+          //     onPressed: () => _goToEditor(),
+          //     child: const Icon(Icons.add),
+          //   )
+          // : null,
     );
   }
 }
