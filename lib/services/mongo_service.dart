@@ -90,17 +90,18 @@ class MongoService {
 
   
   /// CREATE: Menambahkan data baru
-  Future<void> insertLog(LogModel log) async 
+  Future<String?> insertLog(LogModel log) async 
   {
     try {
       final collection = await _getSafeCollection();
-      await collection.insertOne(log.toMap());
-
+      final result = await collection.insertOne(log.toMap());
+      
       await LogHelper.writeLog(
         "SUCCESS: Data '${log.title}' Saved to Cloud",
         source: _source,
         level: 2,
       );
+      return result.id?.toString();
     } catch (e) {
       await LogHelper.writeLog(
         "ERROR: Insert Failed - $e",
@@ -111,18 +112,20 @@ class MongoService {
     }
   }
 
-  Future<List<LogModel>> getLogs() async 
+  Future<List<LogModel>> getLogs(String teamId) async 
   {
     try {
       final collection = await _getSafeCollection(); 
 
       await LogHelper.writeLog(
-        "INFO: Fetching data from Cloud...",
+        "INFO: Fetching data for Team: $teamId",
         source: _source,
         level: 3,
       );
 
-      final List<Map<String, dynamic>> data = await collection.find().toList();
+      final List<Map<String, dynamic>> data = await collection
+          .find(where.eq('teamId', teamId))
+          .toList();
       return data.map((json) => LogModel.fromMap(json)).toList();
     } catch (e) {
       await LogHelper.writeLog(
@@ -141,7 +144,7 @@ class MongoService {
       if (log.id == null)
       throw Exception("ID Log tidak ditemukan untuk update");
 
-      await collection.replaceOne(where.id(log.id!), log.toMap());
+      await collection.replaceOne(where.id(ObjectId.fromHexString(log.id!)), log.toMap());
 
       await LogHelper.writeLog(
         "DATABASE: Update '${log.title}' Berhasil",

@@ -26,13 +26,15 @@ class _LoginViewState extends State<LoginView> {
       return;
     }
 
-    bool isSuccess = _controller.login(user, pass);
+    final result = _controller.login(user, pass);
 
-    if (isSuccess) {
+    if (result != null) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (context) => LogView(username: user),
+          builder: (context) => LogView(
+            currentUser: result,
+          ),
         ),
       );
     } else {

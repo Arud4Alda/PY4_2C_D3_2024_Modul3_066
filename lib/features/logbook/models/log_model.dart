@@ -1,24 +1,27 @@
+import 'package:mongo_dart/mongo_dart.dart';
 import 'package:hive/hive.dart';
-import 'package:mongo_dart/mongo_dart.dart' show ObjectId;
 
 part 'log_model.g.dart';
 
 @HiveType(typeId: 0)
 class LogModel {
   @HiveField(0)
-  final ObjectId? id;
+  String? id;
   @HiveField(1)
   final String title;
   @HiveField(2)
   final String category;
   @HiveField(3)
   final String date;
-  @HiveField(5)
+  @HiveField(4)
   final String description;
+  @HiveField(5)
+  final String authorId;
   @HiveField(6)
-  final String authorId; 
+  final String teamId;
   @HiveField(7)
-  final String teamId; 
+  final bool isPublic;
+
 
   LogModel({
     this.id,
@@ -28,31 +31,33 @@ class LogModel {
     required this.description,
     required this.authorId,
     required this.teamId,
+    required this.isPublic,
   });
 
-  // Untuk Tugas HOTS: Konversi Map (JSON) ke Object
   factory LogModel.fromMap(Map<String, dynamic> map) {
     return LogModel(
-      id: map['_id'] as ObjectId?,
+      id: (map['_id'] as ObjectId?)?.oid,
       title: map['title'],
       category: map['category'],
       date: map['date'],
       description: map['description'],
-      authorId: map['authorID'],
-      teamId: map['teamId'],
+      authorId: map['authorId'] ?? 'unknown_user',
+      teamId: map['teamId'] ?? 'no_team',
+      isPublic: map['isPublic'] ?? true,
     );
   }
 
   // Konversi Object ke Map (JSON) untuk disimpan
   Map<String, dynamic> toMap() {
     return {
-      '_id': id?? ObjectId(),
+      '_id': id != null ? ObjectId.fromHexString(id!) : ObjectId(),
       'title': title,
       'category': category,
       'date': date,
       'description': description,
-      'authorID': authorId,
+      'authorId': authorId,
       'teamId': teamId,
+      'isPublic': isPublic,
     };
   }
 }

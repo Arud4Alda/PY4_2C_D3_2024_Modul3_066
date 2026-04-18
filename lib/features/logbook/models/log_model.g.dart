@@ -17,20 +17,21 @@ class LogModelAdapter extends TypeAdapter<LogModel> {
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
     return LogModel(
-      id: fields[0] as ObjectId?,
+      id: fields[0] as String?,
       title: fields[1] as String,
       category: fields[2] as String,
       date: fields[3] as String,
-      description: fields[5] as String,
-      authorId: fields[6] as String,
-      teamId: fields[7] as String,
+      description: fields[4] as String,
+      authorId: fields[5] as String,
+      teamId: fields[6] as String,
+      isPublic: fields[7] as bool,
     );
   }
 
   @override
   void write(BinaryWriter writer, LogModel obj) {
     writer
-      ..writeByte(7)
+      ..writeByte(8)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -39,12 +40,14 @@ class LogModelAdapter extends TypeAdapter<LogModel> {
       ..write(obj.category)
       ..writeByte(3)
       ..write(obj.date)
-      ..writeByte(5)
+      ..writeByte(4)
       ..write(obj.description)
-      ..writeByte(6)
+      ..writeByte(5)
       ..write(obj.authorId)
+      ..writeByte(6)
+      ..write(obj.teamId)
       ..writeByte(7)
-      ..write(obj.teamId);
+      ..write(obj.isPublic);
   }
 
   @override

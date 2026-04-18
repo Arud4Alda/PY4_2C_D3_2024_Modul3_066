@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:py4_2c_d3_2024_modul1_066/features/logbook/log_controller.dart';
 import 'package:py4_2c_d3_2024_modul1_066/features/logbook/models/log_model.dart';
+import 'package:py4_2c_d3_2024_modul1_066/features/logbook/log_controller.dart';
 
 class LogEditorPage extends StatefulWidget {
   final LogModel? log;
@@ -23,37 +23,53 @@ class LogEditorPage extends StatefulWidget {
 
 class _LogEditorPageState extends State<LogEditorPage> {
   late TextEditingController _titleController;
-  late TextEditingController _descController;
+  late TextEditingController _contentController;
+  String selectedCategory = "Mechanical";
+  bool _isPublic = false;
 
   @override
   void initState() {
     super.initState();
     _titleController = TextEditingController(text: widget.log?.title ?? '');
-    _descController = TextEditingController(
+    selectedCategory = widget.log?.category ?? "Mechanical";
+    _contentController = TextEditingController(
       text: widget.log?.description ?? '',
     );
-
-    // TAMBAHKAN INI: Listener agar Pratinjau terupdate otomatis
-    _descController.addListener(() {
+    _isPublic = widget.log?.isPublic ?? false;
+    _contentController.addListener(() {
       setState(() {});
     });
   }
 
-  void _save() {
+  void _save() async{
     if (widget.log == null) {
       // Tambah Baru
-      widget.controller.addLog(
+      await widget.controller.addLog(
         _titleController.text,
-        _descController.text,
+        selectedCategory,
+        _contentController.text,
         widget.currentUser['uid'],
         widget.currentUser['teamId'],
+        _isPublic,
       );
     } else {
       // Update
       widget.controller.updateLog(
-        widget.index!,
+        widget.log!,
         _titleController.text,
-        _descController.text,
+        selectedCategory,
+        _contentController.text,
+        widget.currentUser['uid'],
+        widget.currentUser['teamId'],
+        _isPublic,
+      );
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Catatan berhasil disimpan"),
+          backgroundColor: Colors.green,
+        ),
       );
     }
     Navigator.pop(context);
@@ -61,8 +77,9 @@ class _LogEditorPageState extends State<LogEditorPage> {
 
   @override
   void dispose() {
+    // JANGAN LUPA: Bersihkan controller agar tidak memory leak
     _titleController.dispose();
-    _descController.dispose();
+    _contentController.dispose();
     super.dispose();
   }
 
@@ -93,9 +110,38 @@ class _LogEditorPageState extends State<LogEditorPage> {
                     decoration: const InputDecoration(labelText: "Judul"),
                   ),
                   const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedCategory,
+                    decoration: const InputDecoration(labelText: "Kategori"),
+                    items: ["Mechanical", "Electronic", "Software"]
+                        .map(
+                          (c) => DropdownMenuItem(
+                            value: c,
+                            child: Text(c),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        selectedCategory = value!;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                    SwitchListTile(
+                      title: const Text("Buat Publik? (Bisa dilihat tim)"),
+                      value: _isPublic,
+                      activeColor: const Color.fromARGB(255, 106, 160, 128),
+                      onChanged: (bool value) {
+                        setState(() {
+                          _isPublic = value;
+                        });
+                      },
+                    ),
+                  const SizedBox(height: 10),
                   Expanded(
                     child: TextField(
-                      controller: _descController,
+                      controller: _contentController,
                       maxLines: null,
                       expands: true,
                       keyboardType: TextInputType.multiline,
@@ -109,7 +155,7 @@ class _LogEditorPageState extends State<LogEditorPage> {
               ),
             ),
             // Tab 2: Markdown Preview
-            Markdown(data: _descController.text),
+            Markdown(data: _contentController.text),
           ],
         ),
       ),

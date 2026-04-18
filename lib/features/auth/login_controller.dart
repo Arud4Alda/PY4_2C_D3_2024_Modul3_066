@@ -1,23 +1,29 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 class LoginController 
 {
-  final Map<String, Map<String, String>> _users = {
-    "alda": {"password": "qwerty", "role": "Ketua"},
-    "pujama": {"password": "asdfg", "role": "Anggota"},
-  };
-  
-  String? currentUserId;
-  String? currentUserRole;
-
-  bool login(String username, String password) {
-    if (_users.containsKey(username))
-    {
-      if (_users[username]!["password"] == password)
-      {
-        currentUserId = username;
-        currentUserRole = _users[username]!["role"];
-        return true;
+  Map<String, dynamic>? login(String username, String password) 
+  {
+    final usersRaw = dotenv.env['USERS'] ?? '';
+    final usersList = usersRaw.split(',');
+    for (var user in usersList) {
+      final parts = user.trim().split(':');
+      if (parts.length == 5) {
+        final u = parts[0];
+        final p = parts[1];
+        final role = parts[2];
+        final uid = parts[3];
+        final teamId = parts[4];
+        if (u == username && p == password) {
+          return {
+            "username": u,
+            "role": role,
+            "uid": uid,
+            "teamId": teamId,
+          };
+        }
       }
     }
-    return false;
+    return null;
   }
 }
