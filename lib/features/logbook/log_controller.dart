@@ -15,17 +15,47 @@ class LogController {
 
   //LOAD
   Future<void> loadLogs(String teamId) async {
-    // 1. Ambil dari LOCAL (Hive)
+    // Ambil dari LOCAL (Hive)
     logsNotifier.value = _box.values.toList();
-    // 2. Sync dari CLOUD
+    _applyFilter();
+    // Sync dari CLOUD
     try {
-      final data = await MongoService().getLogs(teamId);
-      final teamdata = data.where((log) => log.teamId == teamId).toList();
+      final clouddata = await MongoService().getLogs(teamId);
+      // final pendingLogs = _box.values.where((log) => log.id == null).toList();
+      // final combinedData = [...data, ...pendingLogs];
+      // final teamdata = data.where((log) => log.teamId == teamId).toList();
+      final localData = _box.values.toList();
+      List<LogModel> finalData = [];
+      // Mencegah editan offline hilang
+      for (var cloudLog in clouddata) {
+        try {
+          // Cari apakah log dari cloud ini ada di HP kita
+          final localLog = localData.firstWhere((l) => l.id == cloudLog.id);          
+          // Bandingkan waktunya
+          DateTime cloudDate = DateTime.parse(cloudLog.date);
+          DateTime localDate = DateTime.parse(localLog.date);
+          // Jika data di HP lebih baru hasil EDIT OFFLINE
+          if (localDate.isAfter(cloudDate)) {
+            finalData.add(localLog);             
+            // unggah perubahannya ke Cloud
+            MongoService().updateLog(localLog).catchError((e) {
+              LogHelper.writeLog("Auto-Sync Edit Tertunda", level: 1);
+            });
+          } else { // Jika tidak, pakai data dari Cloud
+            finalData.add(cloudLog);
+          }
+        } catch (e) {// Jika tidak ada di lokal 
+          finalData.add(cloudLog);
+        }
+      }
+      // Tambahkan data PENDING 
+      final pendingLogs = localData.where((log) => log.id == null).toList();
+      finalData.addAll(pendingLogs);
       await _box.clear();
-      await _box.addAll(teamdata);
-      logsNotifier.value = teamdata;
+      await _box.addAll(finalData);
+      logsNotifier.value = finalData;
       await LogHelper.writeLog(
-        "SYNC: Data berhasil diperbarui dari Atlas",
+        "SYNC: Data berhasil diperbarui dari Atlas dan Lokal",
         level: 2,
       );
     } catch (e) {
@@ -90,15 +120,24 @@ class LogController {
       teamId: teamId,
       isPublic: isPublic,
     );
-    await MongoService().updateLog(updatedLog);
-
+    //await MongoService().updateLog(updatedLog);
+    final allLocalLogs = _box.values.toList();
+    final indexInBox = allLocalLogs.indexWhere((item) => item.id == oldLog.id);
+    if (indexInBox != -1) {
+      await _box.putAt(indexInBox, updatedLog); // Timpa data lama di Hive
+    }
     final current = List<LogModel>.from(logsNotifier.value);
     final index = current.indexOf(oldLog);
     if (index != -1) {
       current[index] = updatedLog;
     }
-
     logsNotifier.value = current;
+    try {
+      await MongoService().updateLog(updatedLog);
+      await LogHelper.writeLog("SYNC: Perubahan '${updatedLog.title}' berhasil diunggah", level: 2);
+    } catch (e) {
+      await LogHelper.writeLog("OFFLINE: Perubahan disimpan lokal, gagal sinkron ke cloud", level: 1);
+    }
     _applyFilter();
   }
 
