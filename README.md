@@ -75,9 +75,9 @@ android {
 
 ### 5. Menjalankan Aplikasi
 Buka terminal di folder proyek dan jalankan "Ritual Pembersihan" berikut:
-flutter clean
-flutter pub get
-flutter run
+* flutter clean
+* flutter pub get
+* flutter run
 
 
 ## 👤 Author
