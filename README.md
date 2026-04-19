@@ -59,7 +59,7 @@ Daftarkan path berikut pada System Variables Windows Anda:
 
 ### 3. Setup Project
 Kloning repositori ini dan masuk ke branch `main`:
-```bash
+
 git checkout main
 flutter pub get
 
