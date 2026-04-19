@@ -1,8 +1,9 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'vision_controller.dart';
-import 'damage_painter.dart';
+import 'package:py4_2c_d3_2024_modul1_066/features/vision/vision_controller.dart';
+import 'package:py4_2c_d3_2024_modul1_066/features/vision/damage_painter.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:py4_2c_d3_2024_modul1_066/features/vision/image_processing_view.dart';
 
 class VisionView extends StatefulWidget {
   const VisionView({super.key});
@@ -47,57 +48,108 @@ class _VisionViewState extends State<VisionView> {
                   ), // Langkah 4
                 ),
               ),
-        // Layer ini transparan dan berada tepat di atas kamera
-        Positioned(
-          bottom: 15,
-          left: 15,
-          child: Container(
-            decoration: const BoxDecoration(
-              color:  Color.fromARGB(255, 106, 160, 128),
-              shape: BoxShape.circle,
-            ),
-            child: IconButton(
-              icon: Icon(
-                _visionController.isFlashOn ? Icons.flash_on : Icons.flash_off,
-                color: _visionController.isFlashOn? Colors.amber : Colors.white,
+            // Layer ini transparan dan berada tepat di atas kamera
+            Positioned(
+              bottom: 15,
+              left: 15,
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: Color.fromARGB(255, 106, 160, 128),
+                  shape: BoxShape.circle,
+                ),
+                child: IconButton(
+                  icon: Icon(
+                    _visionController.isFlashOn
+                        ? Icons.flash_on
+                        : Icons.flash_off,
+                    color: _visionController.isFlashOn
+                        ? Colors.amber
+                        : Colors.white,
+                  ),
+                  onPressed: () => _visionController.toggleFlash(),
+                ),
               ),
-              onPressed: () => _visionController.toggleFlash(),
             ),
-          ),
+            Positioned(
+              bottom: 15,
+              right: 15, // SWITCH UNTUK OVERLAY PAINTER
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color.fromARGB(32, 0, 0, 0),
+                  borderRadius: BorderRadius.circular(30),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _visionController.isOverlayVisible
+                          ? Icons.visibility
+                          : Icons.visibility_off,
+                      color: const Color.fromARGB(255, 106, 160, 128),
+                      size: 30,
+                    ),
+                    Switch(
+                      value: _visionController.isOverlayVisible,
+                      activeThumbColor: const Color.fromARGB(255,255,255,255,),
+                      activeTrackColor: const Color.fromARGB(255,106,160,128,),
+                      inactiveThumbColor: const Color.fromARGB(255,106,160,128,),
+                      inactiveTrackColor: const Color.fromARGB(255,255,255,255,),
+                      onChanged: (value) {
+                        _visionController.toggleOverlay();
+                      },
+                    ),
+                  ],
+                ),
+              ),              
+            ),            
+          ],
         ),
-        Positioned(
-          bottom: 15,
-          right: 15,// SWITCH UNTUK OVERLAY PAINTER
+        Expanded(
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color.fromARGB(32, 0, 0, 0),
-              borderRadius: BorderRadius.circular(30),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  _visionController.isOverlayVisible ? Icons.visibility : Icons.visibility_off,
-                  color: const Color.fromARGB(255, 106, 160, 128),
-                  size: 30,
+            width: double.infinity,
+            color: const Color(0xFFFFF8E7),
+            child: Center(
+              child: FloatingActionButton.extended(
+                heroTag: "btn_capture",
+                backgroundColor: const Color.fromARGB(255, 106, 160, 128),
+                foregroundColor: Colors.white,
+                icon: const Icon(Icons.camera_rounded, size: 28),
+                label: const Text(
+                  "Tangkap Gambar",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
-                Switch(
-                  value: _visionController.isOverlayVisible,
-                  activeThumbColor: const Color.fromARGB(255, 255, 255, 255),
-                  activeTrackColor: const Color.fromARGB(255, 106, 160, 128),
-                  inactiveThumbColor: const Color.fromARGB(255, 106, 160, 128),
-                  inactiveTrackColor: const Color.fromARGB(255, 255, 255, 255),
-                  onChanged: (value) {
-                   _visionController.toggleOverlay();
-                  },
-                ),
-              ],              
+                onPressed: () async {
+                  try {
+                    // Pastikan kamera sudah siap
+                    if (_visionController.controller != null && 
+                        _visionController.controller!.value.isInitialized) {
+                      
+                      // 1. Ambil Foto
+                      final XFile file = await _visionController.controller!.takePicture();
+                      
+                      // 2. Pindah ke Halaman Pengolahan Citra (Bawa path gambarnya)
+                      if (!context.mounted) return;
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ImageProcessingPage(imagePath: file.path),
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text("Gagal mengambil gambar: $e")),
+                    );
+                  }
+                },
+              ),
             ),
           ),
         ),
       ],
-    ),
-    ],
     );
   }
 
@@ -126,7 +178,7 @@ class _VisionViewState extends State<VisionView> {
                     const SizedBox(height: 16),
                     Text(
                       _visionController.errorMessage!,
-                      style: const TextStyle(color: Colors.white, fontSize: 16),
+                      style: const TextStyle(color: Color.fromARGB(255,106,160,128,), fontSize: 16),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 20),
