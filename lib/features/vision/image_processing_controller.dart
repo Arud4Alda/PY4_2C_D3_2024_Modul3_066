@@ -19,7 +19,7 @@ Future<Uint8List?> runImageProcessing(ProcessRequest request) async {
   String op = request.operation;
   List<String> cvOperations = [
     "Histogram Spec", "Adaptive Hist", "Fourier", 
-    "Salt & Pepper", "Derau Gaussian", "Derau Periodik", "Buat Histogram"
+    "Salt & Pepper", "Derau Gaussian", "Derau Periodik", "Histogram"
   ];
   if (cvOperations.contains(op)) {
     // Decode gambar ke format Matriks OpenCV 
@@ -113,7 +113,21 @@ Future<Uint8List?> runImageProcessing(ProcessRequest request) async {
             dst = cv.cvtColor(finalMag, cv.COLOR_GRAY2BGR);
           }
 
-          else if (op == "Buat Histogram") {
+          else if (op == "Derau Periodik") {
+            // Derau Periodik dengan "Spasial Periodik" (pola grid jaring berulang).
+            cv.Mat noise = cv.Mat.zeros(src.rows, src.cols, src.type);            
+            // Menggambar garis horizontal berulang setiap 5 piksel
+            for (int y = 0; y < src.rows; y += 5) {
+               cv.line(noise, cv.Point(0, y), cv.Point(src.cols, y), cv.Scalar(40, 40, 40, 0), thickness: 1);
+            }
+            // Menggambar garis vertikal berulang setiap 5 piksel
+            for (int x = 0; x < src.cols; x += 5) {
+               cv.line(noise, cv.Point(x, 0), cv.Point(x, src.rows), cv.Scalar(40, 40, 40, 0), thickness: 1);
+            }            
+            cv.add(src, noise, dst: dst);
+          }
+
+          else if (op == "Histogram") {
             // Membuat grafik Histogram menggunakan OpenCV 
             cv.Mat gray = cv.cvtColor(src, cv.COLOR_BGR2GRAY);
             cv.Mat hist = cv.calcHist(cv.VecMat.fromList([gray]), cv.VecI32.fromList([0]), cv.Mat.empty(), cv.VecI32.fromList([256]), cv.VecF32.fromList([0, 256]));
@@ -124,14 +138,15 @@ Future<Uint8List?> runImageProcessing(ProcessRequest request) async {
             
             // Normalisasi data histogram agar pas di layar
             cv.normalize(hist, hist, alpha: 0, beta: histH.toDouble(), normType: cv.NORM_MINMAX);
-            
+            cv.Mat hist64 = hist.convertTo(cv.MatType.CV_64FC1);
+
             // Gambar garis
             for (int i = 1; i < 256; i++) {
               cv.line(
                 dst, 
-                cv.Point((i - 1) * 2, histH - hist.at<double>(i - 1,0).round()), 
-                cv.Point(i * 2, histH - hist.at<double>(i,0).round()), 
-                cv.Scalar(255, 255, 255), 
+                cv.Point((i - 1) * 2, histH - hist64.at<double>(i - 1,0).round()), 
+                cv.Point(i * 2, histH - hist64.at<double>(i,0).round()), 
+                cv.Scalar(255, 255, 255, 255), 
                 thickness: 2
               );
             }
